@@ -84,6 +84,8 @@ namespace HPControl.Service
             if (!_holding)
             {
                 if (double.IsNaN(cpuT)) { State = "Fan controller in charge (no CPU temperature)"; return null; }
+                // refused three times in a row: this firmware doesn't take fan commands, stop trying until restart
+                if (_refusals >= 3) { State = "Fan controller in charge (the firmware doesn't accept fan commands)"; return null; }
                 if (_safetyHandBack)
                 {
                     bool ok = cpuAvg <= s.HandBackCpuC - 15 && (double.IsNaN(caseAvg) || caseAvg <= s.HandBackInternalC - 5);
@@ -174,6 +176,8 @@ namespace HPControl.Service
             if (!_on && _cmd <= Math.Max(MinRpm, s.StopFromRpm)) _cmd = 0;
             Ramping = Math.Abs(Math.Max(0, want) - _cmd) > 25;
             Send(now);
+            // the firmware keeps refusing the fan command: don't pretend to be in charge
+            if (_sendFails >= 3) { _sendFails = 0; _refusals++; return HandBack(now, "the firmware didn't accept the fan command", true); }
 
             State = _cmd <= 0 ? "Fan off · on above " + s.OnAboveC.ToString("0") + " °C" : "HP Control fan curve · " + (int)Math.Round(_cmd) + " rpm" + (want > _cmd + 50 ? " (ramping up)" : want < _cmd - 50 ? " (ramping down)" : "");
             // while the fan is off the curves aren't in use: show what switches it on instead of curve speeds
@@ -195,8 +199,10 @@ namespace HPControl.Service
             int v = _cmd <= 0 ? 0 : (int)(Math.Round(_cmd / 50.0) * 50);
             // write when it changed, and re-assert every 30 s (60 s when off; harmless, covers the EC having reset itself)
             if (v == _sent && (now - _lastSend).TotalSeconds < (v == 0 ? 60 : 30)) return;
-            if (_bios.FanOverride(v)) { _sent = v; _lastSend = now; }
+            if (_bios.FanOverride(v)) { _sent = v; _lastSend = now; _sendFails = 0; _refusals = 0; }
+            else _sendFails++;
         }
+        int _sendFails, _refusals;
 
         string HandBack(DateTime now, string reason, bool safety)
         {

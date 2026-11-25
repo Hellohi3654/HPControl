@@ -52,14 +52,34 @@ namespace HPControl.App
 
         // ------------------------------------------------------------ check
         /// <summary>The newest release if it's newer than this version, otherwise null. Throws on network errors.
-        /// Blocking: call it on a worker thread.</summary>
+        /// Blocking: call it on a worker thread. Reads the release's small latest.json first (a plain download, not
+        /// counted against GitHub's API limit, which is shared by everyone behind the same internet address), and
+        /// falls back to the GitHub API for releases that don't have one.</summary>
         public static Release Check(string repo)
         {
             if (string.IsNullOrWhiteSpace(repo) || !Regex.IsMatch(repo, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) throw new InvalidOperationException("No update source set");
-            var d = Json.Parse(Get("https://api.github.com/repos/" + repo + "/releases/latest")) as Dictionary<string, object>;
+            Release r;
+            try { r = FromManifest(Get("https://github.com/" + repo + "/releases/latest/download/latest.json", false)); }
+            catch { r = FromApi(Get("https://api.github.com/repos/" + repo + "/releases/latest", true)); }
+            return r == null || r.Version <= Current || string.IsNullOrEmpty(r.ZipUrl) ? null : r;
+        }
+
+        static Release FromManifest(string json)
+        {
+            var d = Json.Parse(json) as Dictionary<string, object>;
+            if (d == null) throw new FormatException("bad latest.json");
+            var r = new Release { Tag = d.Str("tag", ""), ZipName = d.Str("zip", ""), ZipUrl = d.Str("url", ""), Sha256 = d.Str("sha256", "").ToLowerInvariant(), Notes = d.Str("notes", ""), PageUrl = d.Str("page", "") };
+            if (!Version.TryParse(d.Str("version", ""), out r.Version)) throw new FormatException("bad version in latest.json");
+            if (!Regex.IsMatch(r.ZipName, @"^HPControl-[\d.]+\.zip$", RegexOptions.IgnoreCase) || !Regex.IsMatch(r.Sha256, "^[0-9a-f]{64}$")) throw new FormatException("bad latest.json");
+            return r;
+        }
+
+        static Release FromApi(string json)
+        {
+            var d = Json.Parse(json) as Dictionary<string, object>;
             if (d == null || d.Bool("draft") || d.Bool("prerelease")) return null;
             var r = new Release { Tag = d.Str("tag_name", ""), Notes = d.Str("body", ""), PageUrl = d.Str("html_url", "") };
-            if (!Version.TryParse(r.Tag.TrimStart('v', 'V'), out r.Version) || r.Version <= Current) return null;
+            if (!Version.TryParse(r.Tag.TrimStart('v', 'V'), out r.Version)) return null;
             var asset = (d.Arr("assets") ?? new List<object>()).OfType<Dictionary<string, object>>()
                 .FirstOrDefault(a => Regex.IsMatch(a.Str("name", ""), @"^HPControl-[\d.]+\.zip$", RegexOptions.IgnoreCase));
             if (asset == null) return null;
@@ -69,11 +89,11 @@ namespace HPControl.App
             return r;
         }
 
-        static string Get(string url)
+        static string Get(string url, bool api)
         {
             var req = (HttpWebRequest)WebRequest.Create(url);
             req.UserAgent = "HPControl/" + AppInfo.Version;
-            req.Accept = "application/vnd.github+json";
+            if (api) req.Accept = "application/vnd.github+json";
             req.Timeout = 15000; req.ReadWriteTimeout = 15000;
             using (var resp = req.GetResponse())
             using (var sr = new StreamReader(resp.GetResponseStream())) return sr.ReadToEnd();
@@ -83,6 +103,19 @@ namespace HPControl.App
         /// <summary>Downloads, verifies and extracts the release, then starts its installer (which asks for admin and
         /// closes HP Control while it runs). Blocking: call it on a worker thread. progress gets 0-100.</summary>
         public static void DownloadAndInstall(Release r, Action<int> progress)
+        {
+            // the tray helper and the window could both be asked: only one update at a time
+            using (var gate = new System.Threading.Mutex(false, "HPControl.Update." + Environment.UserName))
+            {
+                bool mine;
+                try { mine = gate.WaitOne(0); } catch (System.Threading.AbandonedMutexException) { mine = true; }
+                if (!mine) throw new InvalidOperationException("an update is already being installed");
+                try { DownloadAndInstallCore(r, progress); }
+                finally { gate.ReleaseMutex(); }
+            }
+        }
+
+        static void DownloadAndInstallCore(Release r, Action<int> progress)
         {
             if (string.IsNullOrEmpty(r.Sha256)) throw new InvalidOperationException("the release has no SHA-256 checksum, so it can't be verified");
             var uri = new Uri(r.ZipUrl);
@@ -121,7 +154,7 @@ namespace HPControl.App
             var installer = Directory.GetFiles(dir, "install.cmd", SearchOption.AllDirectories).OrderBy(p => p.Length).FirstOrDefault();
             if (installer == null || !File.Exists(Path.Combine(Path.GetDirectoryName(installer), "bin", "HPControl.Service.exe")))
                 throw new InvalidOperationException("the update doesn't contain the installer");
-            Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installer) });
+            Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(installer) })?.Dispose();
         }
     }
 }

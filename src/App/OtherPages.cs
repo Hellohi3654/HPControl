@@ -139,7 +139,7 @@ namespace HPControl.App
             _inMute.CheckedChanged += (s, e) => { if (!_loading) Try(() => CoreAudio.SetMute(null, EDataFlow.Capture, _inMute.Checked)); };
         }
 
-        static void Shell(string s) { try { Process.Start(new ProcessStartInfo(s) { UseShellExecute = true }); } catch { } }
+        static void Shell(string s) { try { Process.Start(new ProcessStartInfo(s) { UseShellExecute = true })?.Dispose(); } catch { } }
         void Try(Action a) { try { a(); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Audio"); } }
 
         volatile bool _listing;
@@ -240,12 +240,21 @@ namespace HPControl.App
             _updBtn.Click += (s, ev) => { if (_update != null) InstallUpdate(); else CheckUpdate(); };
 
             var b = Add(new Card("Backup & maintenance"));
-            var f1 = new Flow(40) { Width = Theme.S(560) };
-            var exp = new FlatButton("Export settings…"); var imp = new FlatButton("Import settings…"); var restore = new FlatButton("Restore a backup…"); var reset = new FlatButton("Reset to defaults");
-            f1.Controls.AddRange(new Control[] { exp, imp, restore, reset });
-            b.Add(new Row("Settings file", f1, "Share profiles with friends who have the same laptop. A backup is saved automatically before every update."));
+            var exp = new FlatButton("Export settings…"); var imp = new FlatButton("Import settings…");
+            var f1 = new Flow(40); f1.Controls.AddRange(new Control[] { exp, imp }); f1.Fit();
+            b.Add(new Row("Settings file", f1, "Share profiles with friends who have the same laptop."));
+            var restore = new FlatButton("Restore a backup…"); var openBackups = new FlatButton("Open backups folder");
+            var f2 = new Flow(40); f2.Controls.AddRange(new Control[] { restore, openBackups }); f2.Fit();
+            b.Add(new Row("Backups", f2, "A copy of your settings is saved automatically before every update, named after the version it came from."));
+            var reset = new FlatButton("Reset to defaults");
+            b.Add(new Row("Start over", reset, "Puts every setting and profile back to how HP Control ships."));
             var logs = new FlatButton("Open data folder");
             b.Add(new Row("Logs and settings", logs, "Send service.log from here when something goes wrong.") { Separator = false });
+            openBackups.Click += (s, ev) =>
+            {
+                var dir = Path.Combine(AppInfo.DataDir, "backups");
+                try { Process.Start("explorer.exe", "\"" + (Directory.Exists(dir) ? dir : AppInfo.DataDir) + "\"")?.Dispose(); } catch { }
+            };
             restore.Click += (s, ev) =>
             {
                 var dir = Path.Combine(AppInfo.DataDir, "backups");
@@ -283,7 +292,7 @@ namespace HPControl.App
                     }
             };
             reset.Click += (s, ev) => { if (MessageBox.Show(this, "Reset all HP Control settings to defaults?", "HP Control", MessageBoxButtons.YesNo) == DialogResult.Yes) { _m.Call("resetSettings"); _m.Reload(); Fill(); } };
-            logs.Click += (s, ev) => { try { Process.Start("explorer.exe", AppInfo.DataDir); } catch { } };
+            logs.Click += (s, ev) => { try { Process.Start("explorer.exe", AppInfo.DataDir)?.Dispose(); } catch { } };
         }
 
         void BindS(Slider s, Action<double> set) => s.ValueCommitted += (o, e) => { if (_loading) return; set(s.Value); _m.MarkDirty(); };
@@ -329,7 +338,8 @@ namespace HPControl.App
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
                 Updater.Release r = null; string err = null;
-                try { r = Updater.Check(repo); Updater.SaveState(DateTime.UtcNow, r?.Tag ?? Updater.LastOffered); } catch (Exception ex) { err = ex.Message; }
+                // a manual check doesn't move the daily schedule, so the tray helper still offers what it finds
+                try { r = Updater.Check(repo); } catch (Exception ex) { err = ex.Message; }
                 try
                 {
                     BeginInvoke((Action)(() =>

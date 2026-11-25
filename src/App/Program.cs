@@ -83,7 +83,7 @@ namespace HPControl.App
                 if (Mutex.TryOpenExisting("HPControl.Agent." + Environment.UserName, out var m)) { m.Dispose(); return; }
                 using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
                     if (k?.GetValue("HPControlAgent") == null) return;
-                Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--agent") { UseShellExecute = false });
+                Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--agent") { UseShellExecute = false })?.Dispose();
             }
             catch { }
         }

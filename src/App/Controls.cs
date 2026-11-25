@@ -460,6 +460,13 @@ namespace HPControl.App
     {
         public int Gap = Theme.S(10);
         public Flow(int height = 40) { Height = Theme.S(height); BackColor = Theme.Card; }
+        /// <summary>Sizes the row to exactly fit its controls (so a row of buttons never gets cut off).</summary>
+        public Flow Fit()
+        {
+            var vis = Controls.Cast<Control>().Where(c => c.Visible).ToList();
+            Width = vis.Sum(c => c.Width) + Gap * Math.Max(0, vis.Count - 1);
+            return this;
+        }
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);

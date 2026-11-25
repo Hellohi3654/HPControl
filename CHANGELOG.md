@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.1
+- Settings: the Backup & maintenance buttons no longer get cut off ("Restore a backup…" and a new "Open backups folder" have their own row).
+- Updates: each release now carries a small `latest.json`, so update checks don't count against GitHub's API limit (which is shared by everyone on the same internet connection). Only one update can install at a time, and a declined admin prompt leaves the update on offer.
+- Fan control: if the firmware stops accepting fan commands, HP Control hands the fan back to the fan controller instead of carrying on as if it were in charge.
+- Battery manager reads the battery's live values in one query instead of four; app windows and folders opened from HP Control no longer keep a handle open.
+
 ## 1.8.0
 - **Updates from GitHub:** the tray helper checks once a day and offers new versions (notification and tray menu). Settings → Updates has "Check now" and an on/off switch. Downloads are checked against the release's SHA-256 before installing, and installing always asks first.
 - **Settings backups:** before a new version changes anything, settings are copied to `C:\ProgramData\HPControl\backups\`, named after the version they came from. Settings → **Restore a backup…** puts one back.

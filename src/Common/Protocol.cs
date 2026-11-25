@@ -10,7 +10,7 @@ namespace HPControl
     public static class AppInfo
     {
         public const string Name = "HP Control";
-        public const string Version = "1.8.0";
+        public const string Version = "1.8.1";
         public const string PipeName = "HPControl.v1";
         public const string ServiceName = "HPControlSvc";
         public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "HPControl");

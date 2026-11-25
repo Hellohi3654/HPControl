@@ -148,7 +148,7 @@ namespace HPControl.App
             try
             {
                 var exe = Application.ExecutablePath;
-                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false })?.Dispose();
             }
             catch { }
         }
@@ -186,8 +186,11 @@ namespace HPControl.App
             Notify("Updating HP Control", "Downloading version " + r.Version + "…");
             new Thread(() =>
             {
-                try { Updater.DownloadAndInstall(r, null); }   // the installer closes this helper and starts the new one
-                catch (Exception ex) { _updating = false; Notify("Update failed", ex.Message); Program.LogError("update", ex); }
+                // the installer closes this helper and starts the new one; if the admin prompt is declined, nothing
+                // changes and the update stays on offer
+                try { Updater.DownloadAndInstall(r, null); }
+                catch (Exception ex) { Notify("Update failed", ex.Message); Program.LogError("update", ex); }
+                finally { _updating = false; }
             }) { IsBackground = true, Name = "update" }.Start();
         }
 

@@ -37,9 +37,11 @@ namespace HPControl.Service
             d["runtimeMin"] = ps.BatteryLifeTime > 0 ? ps.BatteryLifeTime / 60 : -1;
 
             double full = Wmi("BatteryFullChargedCapacity", "FullChargedCapacity");
-            double rem = Wmi("BatteryStatus", "RemainingCapacity");
-            double volt = Wmi("BatteryStatus", "Voltage");
-            double cr = Wmi("BatteryStatus", "ChargeRate"), dr = Wmi("BatteryStatus", "DischargeRate");
+            // one query for the four live values (the page asks every 5 s while it's open)
+            var st = WmiQuery.First(@"root\wmi", "SELECT RemainingCapacity, Voltage, ChargeRate, DischargeRate FROM BatteryStatus",
+                o => new[] { Convert.ToDouble(o["RemainingCapacity"]), Convert.ToDouble(o["Voltage"]), Convert.ToDouble(o["ChargeRate"]), Convert.ToDouble(o["DischargeRate"]) },
+                new[] { double.NaN, double.NaN, double.NaN, double.NaN });
+            double rem = st[0], volt = st[1], cr = st[2], dr = st[3];
             double cycles = Wmi("BatteryCycleCount", "CycleCount");
             // static data and BIOS settings barely change but are slow to query: cache them
             var now = DateTime.UtcNow;

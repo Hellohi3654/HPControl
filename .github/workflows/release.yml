@@ -56,9 +56,13 @@ jobs:
           $m = [regex]::Match($log, "(?ms)^## $([regex]::Escape($env:VER))\b.*?(?=^## |\z)")
           if ($m.Success) { $notes += $m.Value.Trim() }
           $notes | Set-Content notes.md -Encoding utf8
+          # small manifest the app reads first: a plain download, so it isn't limited like the GitHub API
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases"
+          [ordered]@{ version = $env:VER; tag = "v$env:VER"; zip = $zip; url = "$base/download/v$env:VER/$zip"; sha256 = $sha; page = "$base/tag/v$env:VER"; notes = $(if ($m.Success) { $m.Value.Trim() } else { '' }) } |
+            ConvertTo-Json | Set-Content latest.json -Encoding utf8
           "ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Publish
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v$env:VER" $env:ZIP --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "HP Control $env:VER" --notes-file notes.md
+        run: gh release create "v$env:VER" $env:ZIP latest.json --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "HP Control $env:VER" --notes-file notes.md
