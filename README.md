@@ -24,7 +24,7 @@ The audio features use HP's own audio components, which the installer copies fro
 ## Releasing
 1. Bump `AppInfo.Version` in `src/Common/Protocol.cs` and add a section to `CHANGELOG.md`.
 2. If settings change, add a `MigrateToVn` step in `src/Service/Store.cs`: only change values still at their old default (settings are backed up automatically first).
-3. Push a tag `vX.Y.Z`. The release workflow builds the zip and publishes it with its SHA-256 (the app's updater checks it).
+3. Push to `main`. When the version has no release yet, the release workflow builds the zip and publishes it as `vX.Y.Z` with its SHA-256 (the app's updater checks it).
 
 ## Disclaimer
 Not affiliated with or endorsed by HP. It talks to the laptop's firmware through HP's own WMI interface and only uses calls that were verified on this model. Use at your own risk.
