@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>HPControl.Service</AssemblyName>
+    <RootNamespace>HPControl.Service</RootNamespace>
+    <ApplicationManifest>service.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Common/*.cs" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.ServiceProcess" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+</Project>

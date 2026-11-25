@@ -1,0 +1,45 @@
+# Builds HP Control and publishes a GitHub release when a version tag (v1.2.3) is pushed.
+# The release notes carry the zip's SHA-256, which the app's updater checks before installing.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        shell: pwsh
+        run: |
+          dotnet build src/Service/Service.csproj -c Release -o out/bin
+          dotnet build src/App/App.csproj -c Release -o out/bin
+      - name: Package
+        shell: pwsh
+        run: |
+          $ver = '${{ github.ref_name }}'.TrimStart('v')
+          $code = (Select-String -Path src/Common/Protocol.cs -Pattern 'Version = "([0-9.]+)"').Matches[0].Groups[1].Value
+          if ($code -ne $ver) { throw "Tag $ver doesn't match AppInfo.Version $code in src/Common/Protocol.cs" }
+          $stage = 'stage/HPControl'
+          New-Item -ItemType Directory -Force "$stage/bin" | Out-Null
+          Copy-Item installer/* $stage/
+          foreach ($f in 'HPControl.exe', 'HPControl.exe.config', 'HPControl.Service.exe', 'HPControl.Service.exe.config') { Copy-Item "out/bin/$f" "$stage/bin/" }
+          $zip = "HPControl-$ver.zip"
+          Compress-Archive -Path $stage -DestinationPath $zip
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $notes = @("Download **$zip**, extract it, and run ``install.cmd``. Already on 1.8.0 or newer? HP Control offers this update itself.", '', "SHA-256: $sha", '')
+          $log = Get-Content CHANGELOG.md -Raw
+          $m = [regex]::Match($log, "(?ms)^## $([regex]::Escape($ver))\b.*?(?=^## |\z)")
+          if ($m.Success) { $notes += $m.Value.Trim() }
+          $notes | Set-Content notes.md -Encoding utf8
+          "ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create '${{ github.ref_name }}' $env:ZIP --title "HP Control ${{ github.ref_name }}" --notes-file notes.md

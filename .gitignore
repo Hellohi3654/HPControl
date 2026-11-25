@@ -1,0 +1,12 @@
+# build output
+bin/
+obj/
+out/
+stage/
+*.zip
+# HP's audio components are copied from the HP app at install time and must never be committed
+fx/
+fx-saved/
+# local data
+*.log
+settings.json
